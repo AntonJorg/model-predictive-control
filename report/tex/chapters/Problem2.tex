@@ -1,1 +1,315 @@
 \chapter{Deterministic and Stochastic Nonlinear Modeling}
+
+\section{Deterministic Nonlinear Model}
+
+\subsection{State definition}
+
+We model each tank as perfectly mixed with constant cross-sectional area $A_i$ and liquid density $\rho$.
+Let $m_i(t)$ denote the liquid mass in tank $i$ and $h_i(t)$ the corresponding liquid level.
+Since the tank volume is $V_i = A_i h_i$ and $m_i = \rho V_i$, we have
+\begin{equation}
+    m_i(t) = \rho A_i h_i(t),
+    \qquad
+    h_i(t) = \frac{m_i(t)}{\rho A_i}.
+    \label{eq:mi_hi}
+\end{equation}
+Of course these relations are cyclic (mass depends on height, which depends on mass), so we must choose a fundamental property for our state. We choose the state vector as the tank masses:
+\begin{equation}
+    x(t) =
+    \begin{bmatrix}
+        m_1(t)\\ m_2(t)\\ m_3(t)\\ m_4(t)
+    \end{bmatrix}.
+\end{equation}
+
+\subsection{Flow definitions}
+
+The two pumps produce volumetric flows $F_1(t), F_2(t)$.
+Valve split parameters $\gamma_1,\gamma_2\in[0,1]$ distribute the pump flows as
+\begin{align}
+q_{1,\mathrm{in}}(t) &= \gamma_1 F_1(t), &
+q_{4,\mathrm{in}}(t) &= (1-\gamma_1)F_1(t),\\
+q_{2,\mathrm{in}}(t) &= \gamma_2 F_2(t), &
+q_{3,\mathrm{in}}(t) &= (1-\gamma_2)F_2(t).
+\end{align}
+
+Each tank drains through an orifice with area $a_i$.
+Using Bernoulli/Torricelli,
+\begin{equation}
+q_i(t) = a_i \sqrt{2 g h_i(t)},
+\qquad i\in\{1,2,3,4\},
+\end{equation}
+where $g$ is gravitational acceleration.
+In the modified 4-tank layout, $q_3$ drains from tank 3 into tank 1, and $q_4$ drains from tank 4 into tank 2.
+
+\subsection{Deterministic dynamics: $\dot x(t)=f(x(t),u(t),d(t),p)$}
+
+We define manipulated variables (MVs) and disturbances as
+\begin{equation}
+u(t)=\begin{bmatrix}F_1(t)\\F_2(t)\end{bmatrix},
+\qquad
+d(t)=\begin{bmatrix}F_3(t)\\F_4(t)\end{bmatrix},
+\end{equation}
+where $F_3,F_4$ are unmeasured inflows entering tanks 3 and 4, respectively.
+
+The parameters are
+\begin{equation}
+p=
+\begin{bmatrix}
+    a_i & A_i & \gamma_1 & \gamma_2 & g & \rho
+\end{bmatrix}^\top.
+\qquad i \in \{1, 2, 3, 4\}
+\end{equation}
+
+For a non-reactive system, conservation of mass gives
+\begin{equation}
+\text{Accumulated} = \text{Influx} - \text{Outflux}.
+\end{equation}
+For example, for tank 1 over a small interval $\Delta t$,
+\begin{equation*}
+m_1(t+\Delta t) - m_1(t)
+=
+\rho q_{1,\mathrm{in}}(t)\Delta t + \rho q_3(t)\Delta t - \rho q_1(t)\Delta t,
+\end{equation*}
+divide by $\Delta t$ and let $\Delta t\to 0$ to obtain
+\begin{equation*}
+\frac{dm_1(t)}{dt} = \rho q_{1,\mathrm{in}}(t) + \rho q_3(t) - \rho q_1(t).
+\end{equation*}
+Applying the same principle to all tanks yields the system mass balances below.
+
+
+\begin{align*}
+\dot m_1(t) &= \rho\big(q_{1,\mathrm{in}}(t) - q_1(t) + q_3(t)\big),\\
+\dot m_2(t) &= \rho\big(q_{2,\mathrm{in}}(t) - q_2(t) + q_4(t)\big),\\
+\dot m_3(t) &= \rho\big(q_{3,\mathrm{in}}(t) - q_3(t) + F_3(t)\big),\\
+\dot m_4(t) &= \rho\big(q_{4,\mathrm{in}}(t) - q_4(t) + F_4(t)\big),
+\end{align*}
+with $h_i(t)=m_i(t)/(\rho A_i)$ from \eqref{eq:mi_hi}.
+This defines $\dot x(t)=f(x(t),u(t),d(t),p)$, which can be written in vector form as:
+\begin{equation}\label{eq:system_deterministic}
+\dot x(t)=
+\rho
+\underbrace{
+\begin{bmatrix}
+-q_1(t)+q_3(t)\\
+-q_2(t)+q_4(t)\\
+-q_3(t)\\
+-q_4(t)
+\end{bmatrix}}_\text{Passive dynamics}
++
+\rho
+\underbrace{
+\begin{bmatrix}
+q_{\mathrm{in},1}(t)\\
+q_{\mathrm{in},2}(t)\\
+q_{\mathrm{in},3}(t)\\
+q_{\mathrm{in},4}(t)
+\end{bmatrix}}_\text{Control input}
++
+\rho
+\underbrace{
+\begin{bmatrix}
+0\\
+0\\
+F_3(t)\\
+F_4(t)
+\end{bmatrix}}_\text{Disturbance}
+\end{equation}
+
+To make the dependence on the inputs more clear, we can extract $x(t)$, $u(t)$, and $d(t)$. Let $k_i = - a_i \sqrt{\frac{2g}{\rho A_i}}$, then:
+\begin{equation}\label{eq:system_deterministic}
+\dot x(t)=
+\rho
+\begin{bmatrix}
+- k_1 & 0 & k_3 & 0 \\
+0 & - k_2 & 0 & k_4 \\
+0 & 0 & - k_3 & 0 \\
+0 & 0 & 0 & - k_4
+\end{bmatrix}
+\sqrt{x(t)}
++
+\rho
+\begin{bmatrix}
+\gamma_1 & 0\\
+0 & \gamma_2 \\
+0 & (1 - \gamma_2) \\
+(1 - \gamma_1) & 0
+\end{bmatrix}
+u(t)
++
+\rho
+\begin{bmatrix}
+0 & 0\\
+0 & 0\\
+1 & 0\\
+0 & 1
+\end{bmatrix}
+d(t)
+\end{equation}
+
+
+
+\subsection{Sensor model: $y(t)=g(x(t),p)$}
+
+The sensors measure the tank levels. Using \eqref{eq:mi_hi},
+\begin{equation}\label{eq:sensor_deterministic}
+y(t)=g(x(t),p)=
+\begin{bmatrix}
+h_1(t)\\h_2(t)\\h_3(t)\\h_4(t)
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{m_1(t)}{\rho A_1}\\[4pt]
+\frac{m_2(t)}{\rho A_2}\\[4pt]
+\frac{m_3(t)}{\rho A_3}\\[4pt]
+\frac{m_4(t)}{\rho A_4}
+\end{bmatrix}.
+\end{equation}
+
+\subsection{Output model: $z(t)=h(x(t),p)$}
+
+In the control problem, the outputs of interest are the lower-tank levels (tanks 1 and 2):
+\begin{equation}
+z(t)=h(x(t),p)=
+\begin{bmatrix}
+h_1(t)\\h_2(t)
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{m_1(t)}{\rho A_1}\\[4pt]
+\frac{m_2(t)}{\rho A_2}
+\end{bmatrix}.
+\end{equation}
+
+\section{Stochastic Nonlinear Model}
+
+In the previous section we derived the deterministic nonlinear model from the system dynamics. Here we keep the same nonlinear plant model, but assume the disturbance inputs are stochastic and \emph{piecewise constant}. Likewise, we introduce measurement uncertainty in the model.
+
+\subsection{Piecewise-constant disturbance model and dynamics}
+
+Let the disturbance be constant on intervals $[t_k,t_{k+1})$:
+\begin{equation}
+d(t) = d_k, \qquad t_k \le t < t_{k+1},
+\qquad
+d_k =
+\begin{bmatrix}
+0\\
+0\\
+F_{3,k}\\
+F_{4,k}
+\end{bmatrix}.
+\end{equation}
+A common choice is to model $\{d_k\}$ as a random walk $d_{k+1}=d_k+w_k$ with $w_k\sim\mathcal{N}(0,Q_d)$ if slow drift is expected. For experimentation purposes the sequence can also be manually pre-defined.
+
+The system is now given as in $\eqref{eq:system_deterministic}$, but with $d(t)=d_k$.
+
+\subsection{Sensor model with measurement noise}
+
+We again assume the sensors to measure tank levels, as in~\eqref{eq:sensor_deterministic}, but now the measurements are corrupted by additive Gaussian noise:
+\begin{equation}
+y(t) = g(x(t),p) + v(t),
+\qquad
+v(t)\sim\mathcal{N}\!\big(0,R_{vv}(p)\big).
+\end{equation}
+
+A standard parametrization of the measurement-noise covariance is
+\begin{equation}
+R_{vv}(p)=
+\begin{bmatrix}
+\sigma_1^2 & 0 & 0 & 0\\
+0 & \sigma_2^2 & 0 & 0\\
+0 & 0 & \sigma_3^2 & 0\\
+0 & 0 & 0 & \sigma_4^2\\
+\end{bmatrix},
+\end{equation}
+for uncorrelated noise.
+
+\section{Stochastic Nonlinear Model (SDE)}
+
+We now drop the assumption that $d(t)$ must be piecewise constant, turning the system dynamics into an SDE:
+
+\begin{equation}
+    \mathrm d x(t) = 
+    \underbrace{f(x(t), u(t), d(t), p)\mathrm dt}_\text{Undisturbed system} + 
+    \underbrace{\sigma(x(t), u(t), d(t), p)\mathrm d\omega(t)}_\text{Stochastic disturbance}
+\end{equation}
+
+Sensor and output functions are as before, but are now acting on the stochastically disturbed system.
+
+\section{Simulation}
+
+\subsection{Deterministic Nonlinear Model}
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 and F2 constant_None.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 varying, F2 constant_None.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 constant, F2 varying_None.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\subsection{Stochastic Nonlinear Model}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 and F2 constant_Piecewise Constant.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 varying, F2 constant_Piecewise constant.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 constant, F2 varying_Piecewise constant.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\subsection{Stochastic Nonlinear Model (SDE)}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 and F2 constant_Stochastic.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 varying, F2 constant_Stochastic.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem2/F1 constant, F2 varying_Stochastic.pdf}
+    \caption{
+        Hello
+    }\label{fig:}
+\end{figure}

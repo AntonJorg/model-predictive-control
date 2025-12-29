@@ -6,6 +6,46 @@ Consider the Modified Four Tank System. Assume that we measure the levels in tan
 
 \section{Draw a block-diagram of the Modified Four Tank System with an MPC system. The MPC block should illustrate both the state-estimator and regulator of the MPC.}
 
+\iffalse
+\begin{tikzpicture}[auto, node distance=18mm, >=latex',
+  block/.style={draw, rectangle, rounded corners, align=center, minimum height=10mm, minimum width=24mm},
+  smallblock/.style={draw, rectangle, rounded corners, align=center, minimum height=8mm, minimum width=22mm},
+  sum/.style={draw, circle, inner sep=1.2pt},
+  line/.style={-latex'}
+]
+
+% Nodes
+\node[block] (plant) {Modified\\4-Tank System\\(Plant)};
+\node[block, left=40mm of plant] (mpc) {MPC};
+
+\node[smallblock, above=9mm of mpc] (sp) {Setpoints\\$\bar z=\begin{bmatrix}\bar z_1\\ \bar z_2\end{bmatrix}$};
+
+\node[smallblock, below=12mm of plant] (sensor) {Sensors\\$y=\begin{bmatrix}h_1\\h_2\end{bmatrix}+v$};
+
+\node[smallblock, above=10mm of plant] (dist) {Unmeasured\\disturbances\\$d=\begin{bmatrix}F_3\\F_4\end{bmatrix}$};
+
+% MPC internal blocks (placed inside by relative positioning)
+\node[smallblock, below=7mm of mpc, xshift=-4mm] (est) {State\\Estimator\\$\hat x$ (and $\hat d$)};
+\node[smallblock, below=7mm of mpc, xshift=+24mm] (reg) {Regulator\\(Optimizer)\\$u=\begin{bmatrix}F_1\\F_2\end{bmatrix}$};
+
+% A dashed box around estimator+regulator to illustrate they are inside MPC
+\node[draw, dashed, rounded corners, fit=(mpc) (est) (reg), inner sep=5mm, label={[align=center]above:MPC (Estimator + Regulator)}] (mpcbox) {};
+
+% Connections
+\draw[line] (sp) -- (reg);
+
+\draw[line] (reg) -- node[above] {$u$} (plant);
+
+\draw[line] (plant) -- node[right] {$h_1,h_2$} (sensor);
+\draw[line] (sensor.west) -| node[pos=0.25, below] {$y$} (est.south);
+
+\draw[line] (est) -- (reg);
+
+\draw[line] (dist) -- node[above] {$d$} (plant);
+
+\end{tikzpicture}
+
+\fi
 
 \iffalse
 Example on how to cite

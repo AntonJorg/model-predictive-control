@@ -1,1 +1,34 @@
 \chapter{Nonlinear Simulation - Step Responses}
+
+\section{Steady State}
+
+A step experiment must start from a steady state. To obtain this steady state, we define constant inputs $u(t)= u_s = [ 200, 200 ]^\top$ and $d(t) = d_s = [300, 300]^\top$, and simulate the system from $x(0) = \mathbf{0}$ until a suitable approximation of the true steady state value is reached. As seen in Figure~\ref{fig:p4:steady_state}, the resulting steady state mass values are $x_s = [28661, 35865, 16304, 18970]^\top$.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem4/PID[P=25, I=1.0, D=0]_None.pdf}
+    \caption{Simulation of the deterministic four tank system with inputs $u(t)= [ 200, 200 ]^\top$ and $d(t) = [300, 300]^\top$, to a steady state at $x(t) = [28661, 35865, 16304, 18970]^\top$.}\label{fig:p4:steady_state}
+\end{figure}
+
+\section{Normalized Step Responses}
+Step responses were simulated for 10\%, 25\%, and 50\% step changes in each manipulated variable \(F_1\) and \(F_2\), corresponding to a $\Delta u$ of $20$, $50$, and $100$ respectively. Each input was stepped individually while the other input was held constant at its steady-state value. The simulations were initialized at steady state and run until the outputs reached a new equilibrium, producing step responses for both measured tank levels.
+
+The step response simulations were repeated with process and measurement noise included. Three noise levels (low, medium, and high) were considered by scaling the noise covariances. For each scenario, multiple Monte Carlo trials were performed, and the mean response was computed to reduce the effect of random fluctuations.
+
+For each input–output channel, the step responses were normalized by the corresponding input step magnitude. The normalized responses corresponding to 10\%, 25\%, and 50\% steps were compared. The normalized curves do not coincide, indicating that the system exhibits nonlinear behavior and that a linear approximation is only valid locally around the operating point.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem4/normalized_step_deterministic_f1.pdf}
+    \includegraphics[width=\textwidth]{figures/problem4/normalized_step_deterministic_f2.pdf}
+    \caption{Normalized step responses of the deterministic four tank system.}\label{fig:p4:step_response_deterministic}
+\end{figure}
+
+\section{Transfer Function Identification}
+Due to the observed nonlinearity, the smallest step size (10\%) was used to identify a local linear model. A joint MIMO identification approach was applied, fitting a discrete-time state-space model to the normalized step responses from both manipulated variables simultaneously. This approach captures the dynamic coupling between inputs and outputs and yields a discrete-time transfer function matrix \(G(z)\) from \(u = [F_1, F_2]^T\) to \(y = [y_1, y_2]^T\).
+
+\section{Identified Linear Model and Discussion}
+The identified linear model was obtained from the discrete-time state-space realization and converted to a continuous-time transfer function matrix \(G(s)\) using a zero-order hold assumption. Comparison between the nonlinear simulation data and the linear model predictions shows good agreement for small input variations but increasing deviations for larger steps. This confirms that the identified model is a local approximation. Accurate step experiments therefore require sufficiently small input changes, steady initial conditions, adequate excitation relative to noise, and simulation times long enough to capture the dominant dynamics.
+
+\section{Markov Parameters}
+Based on the identified discrete-time model, the corresponding impulse response coefficients (Markov parameters) were computed for a chosen sampling time. These coefficients were obtained directly from the state-space matrices and plotted for each input–output channel. The Markov parameters decay over time, indicating stable system dynamics and providing a compact representation suitable for prediction and MPC design.
