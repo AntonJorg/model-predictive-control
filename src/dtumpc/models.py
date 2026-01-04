@@ -24,29 +24,51 @@ class ModelParameters:
         object.__setattr__(self, "flow_rates", flow_rates)
 
 
-default_params = ModelParameters(
-    area_outlet=jnp.ones(4) * 1.2272,
-    area_tank=jnp.ones(4) * 380.1327,
-    g=981,
-    rho=1,
-    gamma1=0.58,
-    gamma2=0.72,
-)
+def construct_params(gamma1, gamma2):
+    flow_rates = jnp.array([
+        gamma1,
+        gamma2,
+        1 - gamma2,
+        1 - gamma1,
+    ])
+
+    area_outlet=jnp.ones(4) * 1.2272
+    area_tank=jnp.ones(4) * 380.1327
+
+    scalars = jnp.array([gamma1, gamma2, 981.0, 1.0])
+
+    return jnp.vstack([area_outlet, area_tank, flow_rates, scalars])
 
 
+default_params = construct_params(0.58, 0.72)
+
+
+pidx = {
+    "area_outlet": 0,
+    "area_tank": 1,
+    "flow_rates": 2,
+    "gamma1": (3, 0),
+    "gamma2": (3, 1),
+    "g": (3, 2),
+    "rho": (3, 3),
+}
+
+
+@jax.jit
 def system_dynamics(state, controls, disturbance, params):
+
     # convert mass to height
-    tank_heights = jnp.clip(state / (params.area_tank * params.rho), 0, None)
+    tank_heights = jnp.clip(state / (params[pidx["area_tank"]] * params[pidx["rho"]]), 0, None)
     
     # outflow due to gravity
-    outflow = params.area_outlet * jnp.sqrt(2 * params.g * tank_heights)
+    outflow = params[pidx["area_outlet"]] * jnp.sqrt(2 * params[pidx["g"]] * tank_heights)
 
     # flow from tanks 3 and 4 into tanks 1 and 2
     crossflow = jnp.concatenate((outflow[2:], jnp.zeros(2)))
 
     # inflow is then pump flow + crossflow
     pump_force = jnp.concatenate((controls, controls[::-1]))    
-    inflow = params.flow_rates * pump_force + crossflow
+    inflow = params[pidx["flow_rates"]] * pump_force + crossflow
 
     # change in tank volume equals inflow minus outflow
     xdot = inflow - outflow
@@ -56,17 +78,23 @@ def system_dynamics(state, controls, disturbance, params):
     xdot = xdot + disturbance
 
     # convert to masses and return
-    return xdot * params.rho
+    return xdot * params[pidx["rho"]]
 
 
-def sensor_deterministic(state, params):
-    return state / params.area_tank
+def sensor_deterministic(state, params, key):
+    return state / params[pidx["area_tank"]]
 
 
-def sensor_stochastic(key, std, state, params):
-    key, sub = jax.random.split(key)
-    noise = jax.random.normal(sub, shape=(4,))
-    return sensor_deterministic(state, params) + noise * std
+def sensor_stochastic(state, params, key, std):
+    noise = jax.random.normal(key, shape=(4,))
+    return state / params[pidx["area_tank"]] + noise * std
 
 
+def disturbance_constant(t, state, params, key, value):
+    return value
 
+def disturbance_piecewise_constant(t, state, params, key, values, scale):
+    return values[t // scale]
+
+def disturbance_sde(t, state, params, key, mean, cov):
+    return jax.random.multivariate_normal(key, mean, cov)

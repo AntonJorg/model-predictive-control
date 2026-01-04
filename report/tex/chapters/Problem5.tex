@@ -1,16 +1,222 @@
 \chapter{Linearization and Discretization}
+\label{chap:5:linearization_discretization}
 
-1. Compute continuous-time linearized models for the 3 models developed in Problem 2.
+In this section, continuous-time linearized models are derived for the three nonlinear models developed in Problem~2. The corresponding continuous-time transfer functions are computed and compared to the gains and time constants obtained from the step-response experiments in Problem~4. The linear models are then discretized, Markov parameters are derived, and the linearization approach is discussed.
 
-2. Compute the continuous-time transfer functions for the continuous-time linearized models.
+All models are expressed in deviation variables around a chosen operating point $(x_s,u_s,d_s)$,
+\begin{align}
+\delta x(t) &= x(t) - x_s, &
+\delta u(t) &= u(t) - u_s, &
+\delta d(t) &= d(t) - d_s, \\
+\delta y(t) &= y(t) - y_s, &
+\delta z(t) &= z(t) - z_s,
+\end{align}
+where $(x_s,u_s,d_s,y_s,z_s)$ satisfies the steady-state conditions
+\begin{align}
+0 &= f(x_s,u_s,d_s,p), \\
+y_s &= g(x_s,p), \\
+z_s &= h(x_s,p).
+\end{align}
+The operating point used throughout this section is as given in \ref{eq:steady_state}.
 
-3. Compare the gains and time constants to the gains and time constants obtained from the
-step response experiments in Problem 4.
+\section{Continuous-time linearized models}
 
-4. Compute discrete-time state space models using a sampling time of your choice.
+\subsection*{Deterministic nonlinear model}
+For the deterministic nonlinear model
+\begin{align}
+\dot{x}(t) &= f(x(t),u(t),d(t),p), \\
+y(t) &= g(x(t),p), \\
+z(t) &= h(x(t),p),
+\end{align}
+a first-order Taylor expansion around $(x_s,u_s,d_s)$ yields the linear continuous-time model
+\begin{align}
+\delta \dot{x}(t) &= A_c\,\delta x(t) + B_c\,\delta u(t) + E_c\,\delta d(t), \\
+\delta y(t) &= C_y\,\delta x(t), \\
+\delta z(t) &= C\,\delta x(t),
+\end{align}
+where the Jacobian matrices are
+\begin{align}
+A_c &= \left.\frac{\partial f}{\partial x}\right|_{(x_s,u_s,d_s,p)}, &
+B_c &= \left.\frac{\partial f}{\partial u}\right|_{(x_s,u_s,d_s,p)}, \\
+E_c &= \left.\frac{\partial f}{\partial d}\right|_{(x_s,u_s,d_s,p)}, &
+C_y &= \left.\frac{\partial g}{\partial x}\right|_{(x_s,p)}, \\
+C &= \left.\frac{\partial h}{\partial x}\right|_{(x_s,p)}.
+\end{align}
+The resulting matrices are
+\begin{equation}\label{eq:linear_system}
+\begin{aligned}
+A_c = \begin{bmatrix}
+-0.00823 & 0        & 0.01092  & 0        \\
+0        & -0.00736 & 0        & 0.01012  \\
+0        & 0        & -0.01092 & 0        \\
+0        & 0        & 0        & -0.01012
+\end{bmatrix}, \quad
+B_c = \begin{bmatrix}
+0.58 & 0    \\
+0    & 0.72 \\
+0    & 0.28 \\
+0.42 & 0
+\end{bmatrix}, \quad
+E_c = \begin{bmatrix}
+0 & 0 \\
+0 & 0 \\
+1 & 0 \\
+0 & 1
+\end{bmatrix}, \\
+C_y = \begin{bmatrix}
+0.00263 & 0       & 0       & 0       \\
+0       & 0.00263 & 0       & 0       \\
+0       & 0       & 0.00263 & 0       \\
+0       & 0       & 0       & 0.00263
+\end{bmatrix}, \quad
+C = \begin{bmatrix}
+0.00263 & 0       & 0       & 0       \\
+0       & 0.00263 & 0       & 0
+\end{bmatrix}.    
+\end{aligned}
+\end{equation}
 
-5. Compute the Markov parameters for these discrete-time state space models and compare
-them to the the Markov parameters you obtained from the step response experiments
+\subsection*{Piecewise-constant stochastic disturbance model}
+For the model with piecewise-constant disturbances $d(t)=d_k$ and additive measurement noise,
+\begin{align}
+\dot{x}(t) &= f(x(t),u(t),d_k,p), \\
+y(t) &= g(x(t),p) + v(t), \qquad v(t)\sim\mathcal{N}(0,R_{vv}), \\
+z(t) &= h(x(t),p),
+\end{align}
+the linearized process dynamics are identical to the deterministic case. The linearized model is therefore
+\begin{align}
+\delta \dot{x}(t) &= A_c\,\delta x(t) + B_c\,\delta u(t) + E_c\,\delta d_k, \\
+\delta y(t) &= C\,\delta x(t) + v(t), \\
+\delta z(t) &= C_z\,\delta x(t),
+\end{align}
+with measurement noise covariance
+\[
+R_{vv} = \text{diag}([\sigma_1^2, \sigma_2^2, \sigma_3^2, \sigma_4^2]).
+\]
 
-6. Discuss and comment on the linearization approach for obtaining discrete-time linear state
-space models.
+Unless otherwise specified, $\sigma_i = 1$, so $R_{vv} = I$.
+
+\subsection*{Stochastic differential equation model}
+For the stochastic differential equation model
+\begin{align}
+dx(t) &= f(x(t),u(t),d(t),p)\,dt + \Sigma(x(t),u(t),d(t),p)\,d\omega(t), \\
+y(t) &= g(x(t),p) + v(t), \\
+z(t) &= h(x(t),p),
+\end{align}
+linearization yields the linear SDE
+\begin{align}
+d(\delta x(t)) &= \big(A_c\,\delta x(t) + B_c\,\delta u(t) + E_c\,\delta d(t)\big)\,dt
++ \Sigma_s\,d\omega(t), \\
+\delta y(t) &= C\,\delta x(t) + v(t), \\
+\delta z(t) &= C_z\,\delta x(t),
+\end{align}
+where the diffusion matrix evaluated at the operating point is
+\[
+\Sigma_s = \Sigma(x_s,u_s,d_s,p)
+          = \text{diag}([\sigma_1^2, \sigma_2^2]).
+\]
+
+Unless otherwise specified, $\sigma_1 = 30$ and $\sigma_2 = 20$.
+
+\section{Continuous-time transfer functions}
+
+For the linear continuous-time model, the transfer matrices from inputs to the controlled outputs are
+\begin{align}
+G(s) &= C_z (sI - A_c)^{-1} B_c
+\end{align}
+The explicit transfer function is
+\begin{align*}
+G(s) &=
+\begin{bmatrix}
+G_{11}(s) & G_{12}(s)\\
+G_{21}(s) & G_{22}(s)
+\end{bmatrix} \\
+G_{11}(s) &= \dfrac{0.001526 s^3 + 4.333 \times 10^{-5} s^2 + 4.049 \times 10^{-7} s + 1.241 \times 10^{-9}}{s^4 + 0.03663 s^3 + 0.0004992 s^2 + 2.998 \times 10^{-6} s + 6.697 \times 10^{-9}} \\
+G_{12}(s) &= \dfrac{8.042 \times 10^{-6} s^2 + 1.406 \times 10^{-7} s + 5.991 \times 10^{-10}}{s^4 + 0.03663 s^3 + 0.0004992 s^2 + 2.998 \times 10^{-6} s + 6.697 \times 10^{-9}} \\
+G_{22}(s) &= \dfrac{1.118 \times 10^{-5} s^2 + 2.142 \times 10^{-7} s + 1.005 \times 10^{-9}}{s^4 + 0.03663 s^3 + 0.0004992 s^2 + 2.998 \times 10^{-6} s + 6.697 \times 10^{-9}} \\
+G_{21}(s) &= \dfrac{0.001894 s^3 + 5.545 \times 10^{-5} s^2 + 5.374 \times 10^{-7} s + 1.723 \times 10^{-9}}{s^4 + 0.03663 s^3 + 0.0004992 s^2 + 2.998 \times 10^{-6} s + 6.697 \times 10^{-9}}
+\end{align*}
+
+\section{Comparison with step-response gains and time constants}
+
+The steady-state (DC) gains of the linearized model are given by
+\begin{align}
+K &= G(0) = -C_z A_c^{-1} B_c
+\end{align}
+and are compared to the gains obtained from the normalized step responses in Problem~4. The dominant time constants are inferred from the eigenvalues of $A_c$,
+\begin{align}
+\lambda_i(A_c) &\approx -\frac{1}{\tau_i},
+\end{align}
+where $\tau_i$ denotes the dominant time constants of the system.
+
+The resulting quantities are
+\begin{align*}
+K &= \begin{bmatrix}
+0.185308 & 0.08945 \\
+0.15010 & 0.25732
+\end{bmatrix}, \\
+\lambda_i(A_c) &= [-0.00823 , -0.00736, -0.01092, -0.01012], \\
+\tau_i &= [121.44 , 135.85 ,  91.60,  98.80]    
+\end{align*}
+
+When the upper flow paths dominate, the linearized model typically exhibits nonminimum-phase behavior, manifested as inverse response in the step experiments and the presence of right-half-plane zeros.
+
+\section{Discrete-time linear models}
+
+A discrete-time model is obtained using zero-order-hold discretization with sampling time
+\[
+T_s = 1.
+\]
+The discrete-time state-space model is
+\begin{align}
+\delta x_{k+1} &= A\,\delta x_k + B\,\delta u_k + E\,\delta d_k, \\
+\delta y_k &= C_y\,\delta x_k, \\
+\delta z_k &= C\,\delta x_k,
+\end{align}
+where
+\begin{align}
+A &= e^{A_c T_s}, \\
+B &= \int_0^{T_s} e^{A_c \tau} B_c\,d\tau, \\
+E &= \int_0^{T_s} e^{A_c \tau} E_c\,d\tau.
+\end{align}
+The resulting matrices are
+\[
+A = \begin{bmatrix}
+0.99179995 & 0         & 0.01081 & 0        \\
+0          & 0.99267   & 0       & 0.01003  \\
+0          & 0         & 0.98914 & 0        \\
+0          & 0         & 0       & 0.98993
+\end{bmatrix}, \quad
+B = \begin{bmatrix}
+0.57762    & 0.00152 \\
+0.00211    & 0.71736 \\
+0          & 0.27848 \\
+0.41788    & 0
+\end{bmatrix}, \quad
+E = \begin{bmatrix}
+0 & 0 \\
+0 & 0 \\
+1 & 0 \\
+0 & 1
+\end{bmatrix}.
+\]
+
+\section{Markov parameters}
+
+The Markov parameters of the discrete-time model from inputs to controlled outputs are
+\begin{align*}
+H_0 &= D, &\text{($D = 0$ for all models considered)} \\
+H_k &= C A^{k-1} B, &k \ge 1,
+\end{align*}
+
+These parameters are compared directly to the Markov parameters estimated from the step-response experiments in Problem~4.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem5/markovparameters.pdf}
+    \caption{Markov parameters for the discretized linear model.}
+\end{figure}
+
+\section{Discussion}
+
+The linearization-based models provide a local approximation of the nonlinear dynamics and are therefore valid only in a neighborhood of the chosen operating point. Deviations observed for larger step experiments are primarily due to nonlinear flow relations and changing operating conditions. Exact ZOH discretization preserves the continuous-time dynamics more accurately than simple Euler schemes and is therefore preferred. The comparison of Markov parameters confirms whether the discretized linear model captures the dominant transient behavior observed experimentally, and highlights the limitations of linear models in the presence of strong nonminimum-phase effects.

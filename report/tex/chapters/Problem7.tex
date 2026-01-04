@@ -1,1 +1,96 @@
 \chapter{QP Solver Interface}
+
+This section describes the quadratic programming (QP) solver interface used throughout the MPC implementations. The purpose of the interface is to provide a unified and solver-agnostic way of solving convex quadratic programs.
+
+\section{QP Problem Formulation}
+
+The quadratic program is defined as
+\begin{align}
+\min_{x \in \mathbb{R}^n} \quad 
+& \phi(x) = \frac{1}{2} x^\top H x + g^\top x \\
+\text{s.t.} \quad 
+& l \leq x \leq u, \\
+& b_l \leq A x \leq b_u,
+\end{align}
+where:
+\begin{itemize}
+\item $H \in \mathbb{R}^{n \times n}$ is symmetric and positive semidefinite, ensuring convexity,
+\item $g \in \mathbb{R}^n$ is the linear cost vector,
+\item $x$ is the optimization variable,
+\item $l,u \in \mathbb{R}^n$ define simple bound constraints,
+\item $A \in \mathbb{R}^{m \times n}$ together with $b_l,b_u \in \mathbb{R}^m$ define general linear inequality constraints.
+\end{itemize}
+
+This problem class covers all QPs arising from linear MPC formulations with hard input and state constraints.
+
+\section{Constraint Unification}
+
+To interface with the selected solver backend (BoxOSQP from the python package JaxOpt:~\cite{jaxopt_implicit_diff}), the bound constraints and general linear constraints are unified into a single linear constraint system of the form
+\begin{equation}
+\ell \leq \tilde{A} x \leq u,
+\end{equation}
+where the augmented constraint matrix is constructed as
+\begin{equation}
+\tilde{A} =
+\begin{bmatrix}
+I \\
+A
+\end{bmatrix},
+\end{equation}
+and the corresponding lower and upper bounds are
+\begin{equation}
+\ell =
+\begin{bmatrix}
+l \\
+b_l
+\end{bmatrix},
+\qquad
+u =
+\begin{bmatrix}
+u \\
+b_u
+\end{bmatrix}.
+\end{equation}
+
+This reformulation expresses all constraints as box constraints on affine functions of the decision variable. From a theoretical standpoint, this transformation is lossless and preserves convexity, feasibility, and optimality conditions.
+
+\section{Solver Structure}
+
+The resulting optimization problem belongs to the class of convex quadratic programs with linear inequality constraints and is solved using an operator-splitting method based on the Alternating Direction Method of Multipliers (ADMM). In particular, the solver minimizes the augmented Lagrangian
+\begin{equation}
+\mathcal L =
+\frac{1}{2} x^\top H x + g^\top x
++ y^\top(\tilde A x - z)
++ \mu^\top(z - u)
++ \phi^\top(\ell - z)
+\end{equation}
+with stationary conditions:
+\begin{align}
+\nabla_x \mathcal L &= Hx + g + \tilde A^\top y = 0, \\
+\nabla_z \mathcal L &= -y + \mu - \phi = 0.
+\end{align}
+
+At each iteration, the algorithm alternates between:
+\begin{itemize}
+\item minimizing a strictly convex quadratic subproblem in $x$,
+\item projecting affine constraint residuals onto the box $[\ell,u]$,
+\item updating dual variables associated with constraint violations.
+\end{itemize}
+
+Convergence is guaranteed under standard assumptions for convex QPs, namely $H \succeq 0$ and feasibility of the constraint set.
+
+\section{Optimality Conditions}
+
+The solver computes a primal-dual solution satisfying the Karush--Kuhn--Tucker (KKT) conditions:
+\begin{align}
+H x^\star + g + \tilde{A}^\top \lambda^\star &= 0, \\
+\ell \leq \tilde{A} x^\star &\leq u, \\
+\lambda_i^\star &\geq 0 \quad \text{if } (\tilde{A}x^\star)_i = \ell_i, \\
+\lambda_i^\star &\leq 0 \quad \text{if } (\tilde{A}x^\star)_i = u_i,
+\end{align}
+with complementary slackness holding componentwise. These conditions characterize the unique global optimum whenever $H$ is positive definite on the feasible subspace.
+
+\section{Role in MPC}
+
+Within the MPC framework, this QP solver interface is used to compute optimal control moves by solving a finite-horizon quadratic cost subject to input and state constraints. The abstraction ensures that changes in solver backend or numerical implementation do not affect the controller design, while preserving a direct correspondence with the theoretical MPC optimization problem.
+

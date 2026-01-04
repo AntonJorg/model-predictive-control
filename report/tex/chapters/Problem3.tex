@@ -1,7 +1,84 @@
 \chapter{PID Control}
 
-\section{Input-output pairings of the four tank system}
+\section{Input--output pairing and implications of dominant upper paths}
+A natural decentralized pairing is
+\[
+u_1 = F_1 \ \rightarrow\ z_1 \ (=\text{level in tank 1}), 
+\qquad
+u_2 = F_2 \ \rightarrow\ z_2 \ (=\text{level in tank 2}),
+\]
+since each pump feeds its corresponding lower tank directly through the valves. This pairing is typically reasonable when the direct (lower-tank) paths dominate, because the steady-state gain matrix is then close to diagonal and loop interaction is moderate.
 
-\section{PID-controller implementation}
+In this project, however, we are mainly interested in operating conditions where the \emph{upper} paths dominate, i.e.\ where a significant fraction of the pumped flow is routed to the upper tanks before reaching the controlled lower tanks. For the quadruple/modified four-tank topology, such conditions are well-known to coincide with \emph{nonminimum-phase} multivariable behavior, often characterized by the presence of a \emph{right half-plane (RHP) zero} in the linearized input--output dynamics [\cite{johansson2002quadruple}]. An RHP zero imposes fundamental performance limitations on linear feedback: one typically observes an initial inverse response/undershoot and a hard trade-off between speed of response, overshoot, and robustness. Consequently, decentralized P/PI/PID designs can become very difficult to tune and may yield slow or poor performance (and in some parameter regimes may not achieve satisfactory closed-loop behavior).
 
-\section{Closed-loop simulation}
+This limitation is \emph{not} a concern for the overall project goal, since the main objective is to proceed to MPC design, where multivariable interaction and constraints are handled explicitly, and where state/disturbance estimation can be integrated systematically.
+
+\section{Decentralized P, PI, and PID controllers}
+Using deviation variables, define the tracking errors
+\[
+e_i(t) = z_i(t) - \bar z_i, \qquad i\in\{1,2\},
+\]
+where $\bar z_i$ are the desired setpoints for the lower-tank levels. A standard decentralized controller for each loop is:
+
+\paragraph{P control}
+\[
+F_i(t) = \bar F_i + K_{p,i}\, e_i(t),
+\]
+where $\bar F_i$ is a nominal (steady-state) pump flow.
+
+\paragraph{PI control}
+\[
+F_i(t) = \bar F_i + K_{p,i}\, e_i(t) + K_{i,i}\!\int_{0}^{t} e_i(\tau)\,d\tau.
+\]
+
+\paragraph{PID control}
+\[
+F_i(t) = \bar F_i + K_{p,i}\, e_i(t) + K_{i,i}\!\int_{0}^{t} e_i(\tau)\,d\tau + K_{d,i}\,\dot e_i(t).
+\]
+In practice, derivative action is normally implemented with filtering (and often kept small) due to measurement noise.
+
+\paragraph{Discrete-time PID controller with sampling time}
+Let $k$ denote the discrete-time index with sampling time $\Delta t$. Define the tracking error
+\[
+e_k = \bar z_k - z_k ,
+\]
+where $\bar z_k \in \mathbb{R}^2$ is the reference and $z_k \in \mathbb{R}^2$ is the measured output. The implementation then follows the pseudocode seen in Algorithm~\ref{alg:PID}.
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\KwIn{Reference $\bar z_k$, measurement $z_k$}
+\KwOut{Control signal $u_k$}
+
+$e_k \leftarrow \bar z_k - z_k$\;
+$P_k \leftarrow K_p\, e_k$\;
+
+$I_k \leftarrow I_{k-1} + \Delta t\, e_k$\;
+$I_k^{\text{term}} \leftarrow K_i\, I_k$\;
+
+\eIf{$k > 0$}{
+    $D_k \leftarrow K_d\, \dfrac{e_k - e_{k-1}}{\Delta t}$\;
+}{
+    $D_k \leftarrow 0$\;
+}
+
+$u_k \leftarrow P_k + I_k^{\text{term}} + D_k$\;
+
+$e_{k-1} \leftarrow e_k$\;
+
+\KwOut{$u_k$}
+\caption{PID controller (single step)}\label{alg:PID}
+\end{algorithm}
+
+\noindent
+Here $K_p$, $K_i$, and $K_d$ are diagonal gain matrices acting on each loop independently. The integral term is scaled by the sampling time $\Delta t$, and the derivative term is implemented using a backward difference approximation.
+
+\section{Closed-loop testing by simulation}
+The controllers are tested in closed-loop simulation on the nonlinear modified four-tank model, including the unmeasured stochastic disturbance flows $F_3$ and $F_4$. Relevant test scenarios include:
+\begin{itemize}
+\item Setpoint steps in $(\bar z_1,\bar z_2)$ (tracking performance).
+\item Disturbance rejection tests with piecewise-constant or stochastic variations in $(F_3,F_4)$.
+\item Evaluation of interaction via cross-coupling (how changes in $F_1$ affect $z_2$ and vice versa).
+\end{itemize}
+Performance is assessed using rise time, overshoot/undershoot (inverse response), settling time, steady-state offset, and robustness to noise.
+
+Qualitatively, P control typically exhibits steady-state offset under disturbances, PI control removes offset but can become sluggish when upper-path dominance induces nonminimum-phase behavior, and PID can be particularly sensitive to noise and nonminimum-phase limitations. This motivates the move to MPC for the main project results.

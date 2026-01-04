@@ -1,10 +1,243 @@
 \chapter{MPC with Input Constraints and Soft Output Constraint}
 
-1. Implement a function for design of an MPC based on discrete-time state space models.
-The MPC should have input constraints and soft constraints. You should explain in the
-report how your Matlab function work and its theoretical background.
+This section extends the constrained MPC regulator from Problem 9 by introducing \emph{soft} constraints on the controlled outputs. Input magnitude and input-rate constraints remain \emph{hard} (must always be satisfied), while output bounds are allowed to be violated when necessary, but such violations are penalized through nonnegative slack variables. The resulting optimization remains a convex quadratic program (QP) with linear constraints.
 
-2. Design the input- and soft-constrained MPC for the models identified in Problem 4 and
-Problem 5.
+\section{Prediction model and decision variables}
 
-3. Implement and discuss a compute and prediction function for this MPC
+Over a horizon of length $N$, the stacked decision variable for the constrained regulator is
+\[
+U_k =
+\begin{bmatrix}
+\hat{u}_{k|k}\\
+\hat{u}_{k+1|k}\\
+\vdots\\
+\hat{u}_{k+N-1|k}
+\end{bmatrix} \in \mathbb{R}^{Nn_u}.
+\]
+As in Problem 8, the stacked predicted controlled outputs can be written in affine form
+\[
+Z_k =
+\begin{bmatrix}
+\hat{z}_{k+1|k}\\
+\hat{z}_{k+2|k}\\
+\vdots\\
+\hat{z}_{k+N|k}
+\end{bmatrix}
+= \Gamma U_k + b_k,
+\]
+where $\Gamma$ is the prediction matrix and $b_k$ collects the contribution from the current state estimate (and any known/estimated disturbances).
+
+To soften output bounds, we introduce nonnegative slack variables for the lower and upper bounds:
+\[
+S_k =
+\begin{bmatrix}
+\hat{s}_{k+1|k}\\
+\hat{s}_{k+2|k}\\
+\vdots\\
+\hat{s}_{k+N|k}
+\end{bmatrix} \ge 0,
+\qquad
+T_k =
+\begin{bmatrix}
+\hat{t}_{k+1|k}\\
+\hat{t}_{k+2|k}\\
+\vdots\\
+\hat{t}_{k+N|k}
+\end{bmatrix} \ge 0,
+\]
+with $S_k,T_k \in \mathbb{R}^{Nn_z}$.
+
+\section{Hard input and input-rate constraints}
+
+The hard input bounds are imposed for each predicted move:
+\[
+u_{\min} \le \hat{u}_{k+j|k} \le u_{\max}, \qquad j=0,\dots,N-1,
+\]
+which in stacked form becomes
+\[
+U_{\min,k} \le U_k \le U_{\max,k}, \qquad
+U_{\min,k} = \mathbf{1}_N\otimes u_{\min},\;\;
+U_{\max,k} = \mathbf{1}_N\otimes u_{\max}.
+\]
+
+The hard input-rate constraints are imposed on increments
+\[
+\Delta \hat{u}_{k+j|k} = \hat{u}_{k+j|k} - \hat{u}_{k+j-1|k},
+\]
+including the first increment relative to the previously applied input $\hat{u}_{k-1|k}$ (known at time $k$). Using the differencing operator $\Lambda$ and selector $I_0$ from Problem 8,
+\[
+\Delta U_k = \Lambda U_k - I_0 \hat{u}_{k-1|k},
+\]
+and the rate bounds become
+\[
+\Delta U_{\min} \le \Lambda U_k - I_0 \hat{u}_{k-1|k} \le \Delta U_{\max},
+\qquad
+\Delta U_{\min}=\mathbf{1}_N\otimes \Delta u_{\min},\;\;
+\Delta U_{\max}=\mathbf{1}_N\otimes \Delta u_{\max}.
+\]
+
+\section{Soft output constraints}
+
+Let the desired admissible output corridor be given by sequences
+\[
+R_{\min,k} =
+\begin{bmatrix}
+\hat{r}_{\min,k+1|k}\\
+\vdots\\
+\hat{r}_{\min,k+N|k}
+\end{bmatrix},
+\qquad
+R_{\max,k} =
+\begin{bmatrix}
+\hat{r}_{\max,k+1|k}\\
+\vdots\\
+\hat{r}_{\max,k+N|k}
+\end{bmatrix}.
+\]
+Hard output constraints would be $R_{\min,k} \le Z_k \le R_{\max,k}$. To guarantee feasibility when these bounds cannot be met (e.g.\ due to limited pump authority or rate limits), they are softened as
+\begin{align}
+Z_k &\ge R_{\min,k} - S_k, \qquad S_k \ge 0, \label{eq:p10_soft_lower}\\
+Z_k &\le R_{\max,k} + T_k, \qquad T_k \ge 0. \label{eq:p10_soft_upper}
+\end{align}
+The interpretation is direct: $\hat{s}_{k+j|k}$ is the amount by which the lower bound is violated at prediction step $j$, and $\hat{t}_{k+j|k}$ is the amount by which the upper bound is violated. When the constraints are satisfiable without violation, the optimizer will typically choose $S_k=T_k=0$ (depending on the chosen slack penalties).
+
+Substituting $Z_k=\Gamma U_k + b_k$ into \eqref{eq:p10_soft_lower}--\eqref{eq:p10_soft_upper} gives linear inequalities in $(U_k,S_k,T_k)$:
+\begin{align}
+\Gamma U_k + S_k &\ge R_{\min,k} - b_k, \label{eq:p10_soft_lower_affine}\\
+\Gamma U_k - T_k &\le R_{\max,k} - b_k. \label{eq:p10_soft_upper_affine}
+\end{align}
+
+\section{Objective function with slack penalties}
+
+The total cost augments the objective from Problem 8 by adding penalties on slack variables:
+\[
+\phi = \phi_z + \phi_u + \phi_{\Delta u} + \phi_s + \phi_t.
+\]
+A common and effective choice is to use a \emph{quadratic} penalty to discourage large violations together with an \emph{$\ell_1$-type} term to discourage any violation at all. For the lower-bound slack sequence $S_k$ (with $S_k\ge 0$), the formulation in the provided reference can be written as
+\begin{align}
+\phi_s
+&= \frac12 \sum_{j=1}^{N} \left\|W_{s,2}\hat{s}_{k+j|k}\right\|_2^2
++ \sum_{j=1}^{N} \left\|W_{s,1}\hat{s}_{k+j|k}\right\|_1 \nonumber\\
+&= \frac12 \left\|\bar{W}_{s,2} S_k\right\|_2^2 + \left\|\bar{W}_{s,1} S_k\right\|_1 \nonumber\\
+&= \frac12 S_k^\top H_s S_k + g_s^\top S_k,
+\end{align}
+where the last equality uses that $S_k\ge 0$ so the $\ell_1$ term becomes linear. The horizon-extended weights are
+\[
+\bar{W}_{s,2}=I_N\otimes W_{s,2}, \qquad \bar{W}_{s,1}=I_N\otimes W_{s,1},
+\]
+and
+\[
+H_s = \bar{W}_{s,2}^\top \bar{W}_{s,2}, \qquad
+g_s = \bar{W}_{s,1}^\top e,\qquad e=\begin{bmatrix}1&1&\cdots&1\end{bmatrix}^\top.
+\]
+Analogously, the upper-bound slack penalty is chosen as
+\[
+\phi_t = \frac12 T_k^\top H_t T_k + g_t^\top T_k,
+\]
+with corresponding weights $(W_{t,2},W_{t,1})$ and horizon extensions.
+
+Slack tuning has a clear meaning:
+\begin{itemize}
+\item Larger $(W_{s,1},W_{t,1})$ discourages \emph{any} violation (pushes toward exact satisfaction when feasible).
+\item Larger $(W_{s,2},W_{t,2})$ strongly penalizes \emph{large} violations (keeps violations small when unavoidable).
+\item If slack penalties are sufficiently large relative to tracking/input penalties, the soft constraints behave almost like hard constraints, but feasibility is preserved.
+\end{itemize}
+
+\section{QP in standard solver form}
+
+Define the stacked optimization vector
+\[
+\bar{x} =
+\begin{bmatrix}
+U_k\\
+S_k\\
+T_k
+\end{bmatrix}.
+\]
+The objective can be written in quadratic form
+\[
+\min_{\bar{x}}\;\; \bar{\phi}(\bar{x})
+= \frac12 \bar{x}^\top \bar{H}\,\bar{x} + \bar{g}^\top \bar{x} + \rho,
+\]
+with block-diagonal Hessian and stacked linear term
+\[
+\bar{H}=
+\begin{bmatrix}
+H & 0 & 0\\
+0 & H_s & 0\\
+0 & 0 & H_t
+\end{bmatrix},
+\qquad
+\bar{g}=
+\begin{bmatrix}
+g\\
+g_s\\
+g_t
+\end{bmatrix}.
+\]
+
+\paragraph{Simple bounds.}
+Nonnegativity of slack variables and input bounds are expressed as
+\[
+\ell \le \bar{x} \le \bar{u},
+\]
+with
+\[
+\ell =
+\begin{bmatrix}
+U_{\min,k}\\
+0\\
+0
+\end{bmatrix},
+\qquad
+\bar{u}=
+\begin{bmatrix}
+U_{\max,k}\\
+\infty\\
+\infty
+\end{bmatrix}.
+\]
+
+\paragraph{General linear constraints in $l \le A\bar{x} \le u$ format.}
+Collect the input-rate and soft output constraints into the affine constraint block
+\[
+b_\ell \le \bar{A}\,\bar{x} \le b_u,
+\]
+where
+\[
+\bar{A}=
+\begin{bmatrix}
+\Lambda & 0 & 0\\
+\Gamma & I & 0\\
+\Gamma & 0 & -I
+\end{bmatrix},
+\qquad
+b_\ell=
+\begin{bmatrix}
+\Delta U_{\min} + I_0 \hat{u}_{k-1|k}\\
+R_{\min,k} - b_k\\
+-\infty
+\end{bmatrix},
+\qquad
+b_u=
+\begin{bmatrix}
+\Delta U_{\max} + I_0 \hat{u}_{k-1|k}\\
+\infty\\
+R_{\max,k} - b_k
+\end{bmatrix}.
+\]
+The three block rows correspond to:
+\begin{enumerate}
+\item hard bounds on input increments,
+\item softened lower output bounds (enforced via $S_k$),
+\item softened upper output bounds (enforced via $T_k$).
+\end{enumerate}
+This is exactly the constraint structure expected by solvers that accept one set of variable bounds and one set of linear constraints in the form $l \le A x \le u$.
+
+\section{Receding-horizon control and interpretation}
+
+The controller applies the first element of the optimal input sequence,
+\[
+u_k = \hat{u}_{k|k}^\star,
+\]
+and repeats the optimization at time $k+1$ using updated state estimates. Predicted trajectories now include not only $(\hat{z}_{k+j|k},\hat{u}_{k+j|k},\Delta\hat{u}_{k+j|k})$ but also slack trajectories $(\hat{s}_{k+j|k},\hat{t}_{k+j|k})$, which provide a direct diagnostic of when and how much output constraints are violated. In analysis plots, $S_k$ and $T_k$ should be reported alongside outputs and bounds, since they explain performance limitations caused by hard input and rate constraints.

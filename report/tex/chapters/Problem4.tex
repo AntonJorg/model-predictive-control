@@ -1,8 +1,13 @@
-\chapter{Nonlinear Simulation - Step Responses}
+\chapter{Nonlinear Simulation - Step Responses}\label{chap:4:nonlinear_simulation}
 
 \section{Steady State}
 
-A step experiment must start from a steady state. To obtain this steady state, we define constant inputs $u(t)= u_s = [ 200, 200 ]^\top$ and $d(t) = d_s = [300, 300]^\top$, and simulate the system from $x(0) = \mathbf{0}$ until a suitable approximation of the true steady state value is reached. As seen in Figure~\ref{fig:p4:steady_state}, the resulting steady state mass values are $x_s = [28661, 35865, 16304, 18970]^\top$.
+A step experiment must start from a steady state. To obtain this steady state, we define constant inputs $u(t)= u_s = [ 200, 200 ]^\top$ and $d(t) = d_s = [300, 300]^\top$, and simulate the system from $x(0) = \mathbf{0}$ until a suitable approximation of the true steady state value is reached. As seen in Figure~\ref{fig:p4:steady_state}, the resulting steady state mass values are $x_s = [28661, 35865, 16304, 18970]^\top$. Therefore, the steady-state operating point used throughout this report is
+\begin{equation}\label{eq:steady_state}
+x_s = [28661, 35865, 16304, 18970]^\top, \quad
+u_s = [200, 200]^\top, \quad
+d_s = [300, 300]^\top.    
+\end{equation}
 
 \begin{figure}[!h]
     \centering

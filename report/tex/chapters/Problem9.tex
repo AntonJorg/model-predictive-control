@@ -1,9 +1,133 @@
 \chapter{Input Constrained MPC}
 
-1. Implement a function for design of an input constrained MPC based on discrete-time state
-space models. You should explain in the report how your Matlab function work and its
-theoretical background.
+Building directly on Problem 8, the unconstrained MPC formulation is extended by explicitly enforcing actuator limitations. In addition to bounds on the absolute input values (pump flow limits), constraints are also imposed on the rate of change of the inputs. These constraints reflect physical actuator limitations and operational requirements, and they fundamentally change the nature of the optimization problem from an unconstrained quadratic minimization (solvable without QP) to a constrained convex quadratic program (QP).
 
-2. Design input constrained MPC for the models identified in Problem 4 and Problem 5.
+\section{Motivation for constraints}
 
-3. Implement and discuss a compute and prediction function for this MPC.
+In the modified four-tank system, the manipulated variables are the pump flow rates $u_k = [F_1\;\;F_2]^\top$. Two distinct types of limitations are relevant:
+
+\begin{itemize}
+\item \textbf{Input bounds:} Pumps have minimum and maximum admissible flow rates due to hardware limits and safety constraints.
+\item \textbf{Input-rate bounds:} Pumps cannot change their flow instantaneously. Large or abrupt changes are undesirable due to actuator dynamics, wear, and potential excitation of unmodeled dynamics.
+\end{itemize}
+
+While the quadratic penalty on input moves $\phi_{\Delta u}$ introduced in Problem 8 \emph{discourages} aggressive changes, it does not \emph{guarantee} that rate limits are respected. Hard constraints are therefore introduced to ensure feasibility at all times.
+
+\section{Constrained finite-horizon optimization problem}
+
+As before, the MPC decision variable is the stacked input sequence
+\[
+U_k = \begin{bmatrix}
+\hat{u}_{k|k} \\
+\hat{u}_{k+1|k} \\
+\vdots \\
+\hat{u}_{k+N-1|k}
+\end{bmatrix}.
+\]
+The objective function remains identical to Problem 8:
+\[
+\phi(U_k) = \frac{1}{2}U_k^\top H U_k + g^\top U_k + \rho,
+\]
+with $H$ and $g$ constructed from the tracking term, input regularization, and move suppression.
+
+The constrained MPC problem at time $k$ is:
+\begin{align}
+\min_{U_k}\quad & \frac{1}{2}U_k^\top H U_k + g^\top U_k \label{eq:p9_obj}\\
+\text{s.t.}\quad 
+& u_{\min} \le \hat{u}_{k+j|k} \le u_{\max}, \qquad j=0,\dots,N-1, \label{eq:p9_u_bounds}\\
+& \Delta u_{\min} \le \hat{u}_{k+j|k} - \hat{u}_{k+j-1|k} \le \Delta u_{\max}, \qquad j=0,\dots,N-1. \label{eq:p9_du_bounds}
+\end{align}
+Here, $\hat{u}_{k-1|k}$ is the previously applied input, known at time $k$, and is used to define the first predicted increment.
+
+\section{Compact matrix form of the constraints}
+
+The input bounds \eqref{eq:p9_u_bounds} can be written compactly as simple bounds on the stacked vector:
+\begin{align}
+l_u \le U_k \le u_u,
+\end{align}
+with
+\[
+l_u = \mathbf{1}_N \otimes u_{\min}, \qquad
+u_u = \mathbf{1}_N \otimes u_{\max}.
+\]
+
+The input-rate constraints \eqref{eq:p9_du_bounds} are expressed using the differencing operator $\Lambda$ introduced in Problem 8:
+\[
+\Delta U_k = \Lambda U_k - I_0 \hat{u}_{k-1|k},
+\]
+where $\Delta U_k$ is the stacked vector of input increments. The rate bounds become:
+\begin{align}
+l_{\Delta u} \le \Lambda U_k - I_0 \hat{u}_{k-1|k} \le u_{\Delta u},
+\end{align}
+with
+\[
+l_{\Delta u} = \mathbf{1}_N \otimes \Delta u_{\min}, \qquad
+u_{\Delta u} = \mathbf{1}_N \otimes \Delta u_{\max}.
+\]
+
+Together, the constraints define a polyhedral feasible set that can be written in the standard form
+\[
+l \;\le\; A U_k \;\le\; u,
+\]
+with
+\begin{align}
+A &=
+\begin{bmatrix}
+I \\
+\Lambda
+\end{bmatrix}, \\
+l &=
+\begin{bmatrix}
+l_u \\
+l_{\Delta u} + I_0 \hat{u}_{k-1|k}
+\end{bmatrix}, \\
+u &=
+\begin{bmatrix}
+u_u \\
+u_{\Delta u} + I_0 \hat{u}_{k-1|k}
+\end{bmatrix}.
+\end{align}
+Here, the first block enforces bounds on the absolute input values, while the second block enforces bounds on the input rate of change through the differencing operator $\Lambda$. This representation matches the constraint format expected by the QP solver developed in Chapter 7.
+
+\section{Effect of constraints on the optimal solution}
+
+Compared to the unconstrained case (Problem 8), the constrained optimizer balances three competing effects:
+\begin{itemize}
+\item reduction of tracking error and control effort,
+\item adherence to absolute actuator limits,
+\item adherence to actuator rate limits.
+\end{itemize}
+
+If the unconstrained optimum violates either type of constraint, the constrained solution lies on the boundary of the feasible set. Importantly, rate constraints introduce \emph{temporal coupling}: a tight rate limit at the current step can restrict feasible inputs several steps ahead, since future inputs must be reachable through admissible increments. As a result, the optimizer may deliberately choose suboptimal short-term tracking to preserve feasibility and smoothness over the horizon.
+
+From a closed-loop perspective:
+\begin{itemize}
+\item input bounds lead to saturation effects and limited authority,
+\item rate bounds produce smoother control trajectories and prevent aggressive switching,
+\item the combination yields behavior that is significantly closer to what can be implemented on real hardware.
+\end{itemize}
+
+\section{Receding-horizon control law}
+
+As in Problem 8, only the first element of the optimal sequence is applied:
+\[
+u_k = \hat{u}_{k|k}^\star.
+\]
+With both input and rate constraints present, the resulting feedback law is no longer linear but piecewise-affine, with regions corresponding to different active sets of constraints. Re-solving the QP at each sampling instant ensures feedback, disturbance rejection, and constraint satisfaction despite model mismatch and noise.
+
+\section{Compute and prediction functionality (conceptual)}
+
+\paragraph{Compute (constraint-aware control move).}
+Given the current state estimate, reference trajectory, previous input, and tuning weights, the controller solves the constrained QP \eqref{eq:p9_obj}--\eqref{eq:p9_du_bounds}. The output is a control action that is optimal with respect to the quadratic objective while being guaranteed to respect both magnitude and rate limitations.
+
+\paragraph{Predict (feasible future trajectories).}
+Using the optimal sequence $U_k^\star$, the controller generates predicted state, output, input, and input-increment trajectories. Unlike in the unconstrained case, these predictions are \emph{feasible by construction}: all predicted inputs lie within allowable ranges and evolve at admissible rates. When predicted tracking is slow, this can be directly attributed to active constraints rather than conservative tuning alone.
+
+\section{Application to identified and linearized models}
+
+The constrained MPC formulation applies unchanged to both linear model classes used previously:
+\begin{itemize}
+\item discrete-time state-space models obtained from step-response identification (Problem 4),
+\item discrete-time linearizations of the nonlinear mass-balance equations (Problem 5).
+\end{itemize}
+For each model, the prediction matrices determine $H$ and $g$, while the actuator specifications determine $u_{\min},u_{\max},\Delta u_{\min},\Delta u_{\max}$. The resulting controller structure is identical across models, differing only in numerical values and closed-loop performance.

@@ -1,135 +1,103 @@
 \chapter{Control Structure}
 
-Consider the Modified Four Tank System. Assume that we measure the levels in tank 1, tank 2. The flows F1 and F2 can be controlled by manipulating the two pumps. Assume that the flows F3 and F4 are unmeasured flow rates that we cannot manipulate. F3 and F4 are stochastic variables (normally distributed). We want to control the levels in tank 1 and tank 2 to desired set points ¯z1 and ¯z2.
+We consider the Modified Four Tank System~[\cite{johansson2002quadruple}] where the liquid levels in tanks 1 and 2 are measured, the pump flows $F_1$ and $F_2$ are manipulated, and the inflows $F_3$ and $F_4$ enter as unmeasured stochastic disturbances. The overall control objective is to regulate the lower-tank levels to the setpoints $\bar z_1$ and $\bar z_2$.
 
-\section{What are the states, x, the measurement, y, the manipulated variables (MVs), u, the measured disturbance variables (DVs), and the controlled variables (CVs) for this system?}
+\section{1.1 States, Measurements, MVs, DVs, and CVs}
+A standard choice is to define the states as the stored liquid amounts in each tank (equivalently, the levels). Using the lecture notation, one convenient state vector is the tank masses
+\begin{align}
+x(t) &= \begin{bmatrix} m_1(t) & m_2(t) & m_3(t) & m_4(t) \end{bmatrix}^\top,
+\end{align}
+where $m_i$ is the liquid mass in tank $i$. This choice is directly aligned with the mass-balance model formulation for the modified four-tank system.
 
-\section{Draw a block-diagram of the Modified Four Tank System with an MPC system. The MPC block should illustrate both the state-estimator and regulator of the MPC.}
+\paragraph{Measurements.}
+We measure the levels in tanks 1 and 2, so the measurement vector is
+\begin{align}
+y(t) &= \begin{bmatrix} h_1(t) & h_2(t) \end{bmatrix}^\top
+= \begin{bmatrix} \dfrac{m_1(t)}{\rho A_1} & \dfrac{m_2(t)}{\rho A_2} \end{bmatrix}^\top,
+\end{align}
+where $A_i$ is the tank cross-sectional area and $\rho$ is the density of the liquid. (In a stochastic model one may add measurement noise $v(t)$, but the variable classification is unchanged.)
 
-\iffalse
-\begin{tikzpicture}[auto, node distance=18mm, >=latex',
-  block/.style={draw, rectangle, rounded corners, align=center, minimum height=10mm, minimum width=24mm},
-  smallblock/.style={draw, rectangle, rounded corners, align=center, minimum height=8mm, minimum width=22mm},
-  sum/.style={draw, circle, inner sep=1.2pt},
-  line/.style={-latex'}
+\paragraph{Manipulated variables (MVs).}
+The manipulated variables are the pump flows that we can command:
+\begin{align}
+u(t) &= \begin{bmatrix} F_1(t) & F_2(t) \end{bmatrix}^\top.
+\end{align}
+These are the two degrees of freedom available to the controller.
+
+\paragraph{Disturbance variables (DVs).}
+The problem states that $F_3$ and $F_4$ are \emph{unmeasured} stochastic flow rates that we cannot manipulate. Thus, they are disturbances:
+\begin{align}
+d(t) &= \begin{bmatrix} F_3(t) & F_4(t) \end{bmatrix}^\top,
+\end{align}
+with $F_3(t),F_4(t)$ modeled as random variables/processes (e.g., piecewise constant random signals or continuous-time stochastic processes, depending on the chosen disturbance model).
+
+\paragraph{Controlled variables (CVs).}
+The controlled variables are the quantities we want to regulate to setpoints, i.e., the lower-tank levels in tanks 1 and 2:
+\begin{align}
+z(t) &= \begin{bmatrix} z_1(t) & z_2(t) \end{bmatrix}^\top
+= \begin{bmatrix} h_1(t) & h_2(t) \end{bmatrix}^\top,
+\end{align}
+with corresponding setpoints
+\begin{align}
+\bar z &= \begin{bmatrix} \bar z_1 & \bar z_2 \end{bmatrix}^\top .
+\end{align}
+In this setup, the CVs coincide with a subset of the measurements, since we directly measure the variables we aim to control.
+
+\section{Block Diagram of the Plant with MPC (Estimator + Regulator)}
+
+The closed-loop structure consists of the plant (Modified Four Tank System) driven by manipulated inputs $u$ and unmeasured disturbances $d$, a sensor block producing measurements $y$, and an MPC block that contains (i) a state estimator and (ii) a regulator (optimizer).
+
+\begin{figure}[!h]
+\centering
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, minimum height=10mm, minimum width=22mm, align=center},
+  big/.style={draw, rounded corners, inner sep=8mm},
+  plant/.style={draw, minimum height=20mm, minimum width=30mm, align=center},
+  line/.style={->, thick},
+  line2/.style={-, thick}
 ]
 
-% Nodes
-\node[block] (plant) {Modified\\4-Tank System\\(Plant)};
-\node[block, left=40mm of plant] (mpc) {MPC};
+% --- MPC inner blocks ---
+\node[block] (ocp) {Linear\\regulator\\(OCP)};
+\node[block, below=10mm of ocp] (est) {State\\estimator\\(KF)};
 
-\node[smallblock, above=9mm of mpc] (sp) {Setpoints\\$\bar z=\begin{bmatrix}\bar z_1\\ \bar z_2\end{bmatrix}$};
+% --- MPC outer frame ---
+\node[big, fit=(ocp)(est), label=above:{MPC}] (mpc) {};
 
-\node[smallblock, below=12mm of plant] (sensor) {Sensors\\$y=\begin{bmatrix}h_1\\h_2\end{bmatrix}+v$};
+% --- Plant block ---
+\node[plant, right=40mm of ocp] (plant) {Modified\\4-Tank Plant};
 
-\node[smallblock, above=10mm of plant] (dist) {Unmeasured\\disturbances\\$d=\begin{bmatrix}F_3\\F_4\end{bmatrix}$};
+% --- Plant block ---
+\node[block, below=10mm of plant] (sensor) {Sensor model};
 
-% MPC internal blocks (placed inside by relative positioning)
-\node[smallblock, below=7mm of mpc, xshift=-4mm] (est) {State\\Estimator\\$\hat x$ (and $\hat d$)};
-\node[smallblock, below=7mm of mpc, xshift=+24mm] (reg) {Regulator\\(Optimizer)\\$u=\begin{bmatrix}F_1\\F_2\end{bmatrix}$};
+% --- Signals inside MPC ---
+\draw[line2] (ocp.west) ++(-12mm,0) -- (ocp.west);
+\node[left=16mm of ocp.west] (zref) {$\bar z$};
+\draw[line, thick] (zref) -- (ocp.west);
 
-% A dashed box around estimator+regulator to illustrate they are inside MPC
-\node[draw, dashed, rounded corners, fit=(mpc) (est) (reg), inner sep=5mm, label={[align=center]above:MPC (Estimator + Regulator)}] (mpcbox) {};
+% Estimator -> OCP (xhat)
+\draw[line, thick] (est.north) -- node[right] {$\hat x$} (ocp.south);
 
-% Connections
-\draw[line] (sp) -- (reg);
+% --- MPC -> Plant (u) ---
+\draw[line, thick] (ocp.east) -- node[above] {$u$} (plant.west);
+\draw[line, thick] (ocp.east) ++(4mm, 0) |- (est.east);
 
-\draw[line] (reg) -- node[above] {$u$} (plant);
+% --- Disturbance into plant (d) ---
+\draw[line, thick] (plant.north) ++(0,5mm) node[above] {$d$} -- (plant.north);
 
-\draw[line] (plant) -- node[right] {$h_1,h_2$} (sensor);
-\draw[line] (sensor.west) -| node[pos=0.25, below] {$y$} (est.south);
+% --- Plant output z to the right ---
+\draw[line, thick] (plant.east) -- ++(10mm,0) node[right] {$z$};
 
-\draw[line] (est) -- (reg);
+% --- Plant output x to sensor ---
+\draw[line, thick] (plant.south) -- node[right] {$x$} (sensor.north);
 
-\draw[line] (dist) -- node[above] {$d$} (plant);
+% --- Measurement y feedback (plant -> estimator) ---
+% take a tap from plant right side (lower-ish) and route back under to estimator
+\coordinate (ytap) at (sensor.south);
+\draw[line, thick] (ytap) -- node[right] {$y$} ($(sensor.south)+(0,-12mm)$) -| (est.south);
 
 \end{tikzpicture}
-
-\fi
-
-\iffalse
-Example on how to cite
-\cite{Nocedal:Wright:2006}
-
-\section{Section XX}
-Example on how to write an optimization problem
-\begin{subequations}
-\begin{alignat}{3}
-& \min_x \quad && f(x) = \frac{1}{2} x' H x + g' x \\
-& s.t. && c(x) = A' x + b = 0
-\end{alignat}
-\end{subequations}
-
-\subsection{Subsection XX.aa}
-
-\section{Section YY}
-
-\begin{figure}[!b]
-    \centering
-    \includegraphics[width=0.75\textwidth, keepaspectratio=true]{figures/FsTsEaR.pdf}
-\caption{Steady state temperature, $T_s$, as a function of the steady state flow rate, $F_s$ with varying $E_a/R$.}\label{fig:FsTsEaR}
+\caption{Block diagram of the MPC-controlled Modified Four Tank System.}\label{fig:system_diagram}
 \end{figure}
 
-
-\begin{figure}[!tb]
-\centering
-    \begin{subfigure}[b]{0.3\textwidth}
-         \centering
-         \includegraphics[width=\textwidth]{figures/FsTsconst_flow450.pdf}
-         \caption{Steady state temperature, $T_s$, as a function of the steady state flow rate, $F_s$.}
-         \label{fig:FsTsconst_flow450}
-     \end{subfigure}
-     \hfill
-     \begin{subfigure}[b]{0.3\textwidth}
-         \centering
-         \includegraphics[width=\textwidth]{figures/RTQ-T.pdf}
-         \caption{The energy produces, $R_T(T)$, and the energy released, $Q(T)$, as functions of the temperature, $T$.}
-         \label{fig:RTQ-T}
-     \end{subfigure}
-     \hfill
-     \begin{subfigure}[b]{0.3\textwidth}
-         \centering
-         \includegraphics[width=\textwidth]{figures/dTdt-T.pdf}
-         \caption{The change in temperature with respect to time, $\dot T$, as a function of the temperature, $T$.}
-         \label{fig:dTdt-T}
-     \end{subfigure}
-        \caption{The dynamical behaviour of the system at flow rate, $F=450$ mL/min. MAKE SURE YOUR FIGURE TEXT IS LARGE ENOUGH TO BE READABLE.}
-        \label{fig:flow rate 450}
-\end{figure}
-
-
-\section{Algorithm}
-
-\begin{algorithm}
-\caption{The explicit Euler algorithm}\label{alg:explicit Euler}
-\KwData{The differential equation $f(t,x(t),p)$, initial and final time $t_0$ and $t_f$, number of steps $N$, initial conditions $x_0$, parameters $p$}
-\KwResult{time and approximation vectors $T$ and $X$}
-calculate step size, $dt=\frac{t_f-t_0}{N}$;\\
-
-\For{n = 1 to N}{
-$f=f(t_n,x_n,p)$\tcp*[r]{Evaluate $f$ at current step}
-$t_{n+1}=t_n+dt$\tcp*[r]{Update and store time step}
-$x_{n+1}=x_n+f\cdot dt$\tcp*[r]{Compute and store the next value of $x$}}
-\end{algorithm}
-
-\section{Matlab code}
-
-\begin{lstlisting}[caption=Matlab code example]
-clear
-close all
-clc
-
-% Explicit Euler fixed step size for 1D CSTR
-T = 0;
-X = x0;
-x = x0;
-for i = 1:length(t)-1
-    [Tn, Xn] = ExplicitEulerFixed(@CSTR1dDrift, [t(i) t(i+1)],N, x(i), U(i), p);
-    x(i+1) = Xn(end);
-    T = [T;Tn(2:end)];
-    X = [X;Xn(2:end)];
-end
-\end{lstlisting}
-\label{lst:MatlabCodeLabel1}
-
-\fi
+For an in-depth description of the system, as well as MPC of a physical realization hereof, see~\cite{schroll2017implementation}.

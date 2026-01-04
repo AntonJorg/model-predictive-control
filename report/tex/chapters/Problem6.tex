@@ -1,4 +1,4 @@
-\chapter{State Estimation for the Discrete-Time Linear System}
+\chapter{State Estimation for the Discrete-Time Linear System}\label{chap:6:state_estimation}
 
 1. Show how the models in Problem 4 and Problem 5 can be represented as linear state space
 models in discrete time.
@@ -14,3 +14,168 @@ not have steady state offsets.
 
 4. Discuss and evaluate the Kalman filters by simulation on the linear and nonlinear models.
 You should explicitly discuss the disturbance models used in designing the Kalman filters
+
+
+
+This section develops Kalman filters for the discrete-time linear models obtained in Problem 4 (identified linear models from step tests) and Problem 5 (linearization and discretization). The objective is to estimate the (deviation) state and unmeasured disturbances affecting the Modified Four Tank System, using measurements of the lower-tank levels.
+
+\section{Discrete-time state-space representations}
+Let the measured outputs be the lower-tank levels (or their deviation variables)
+\[
+y_k = \begin{bmatrix} y_{1,k} \\ y_{2,k}\end{bmatrix}, \qquad
+y_k = C_y x_k + v_k,
+\]
+where $v_k$ is measurement noise. For MPC we also define controlled outputs
+\[
+z_k = C x_k.
+\]
+
+\paragraph{Models from Problem 4 (identified linear models).}
+From the identified discrete-time transfer function matrix $G(q^{-1})$ (from $\Delta u$ to $\Delta y$), we form a discrete-time state-space realization
+\[
+x_{k+1} = A x_k + B u_k + G w_k,\qquad
+y_k = C_y x_k + v_k,\qquad
+z_k = C x_k,
+\]
+where $w_k$ is a process-noise sequence capturing (i) modeling error and (ii) unmeasured disturbances. Any minimal realization (e.g.\ controllable canonical form or balanced realization) is acceptable as long as it reproduces the identified impulse/step responses.
+
+\paragraph{Models from Problem 5 (linearization and discretization).}
+Starting from the continuous-time linearization around a steady state $(x_s,u_s,d_s)$,
+\[
+\dot{\delta x}(t) = A_c \delta x(t) + B_c \delta u(t) + E_c \delta d(t),\qquad
+\delta y(t) = C_y \delta x(t),
+\]
+we discretize with ZOH over sampling time $T_s$ to obtain
+\[
+\delta x_{k+1} = A \delta x_k + B \delta u_k + E \delta d_k,
+\qquad
+\delta y_k = C_y \delta x_k + v_k,
+\]
+with
+\[
+A = e^{A_c T_s},\qquad
+B = \int_{0}^{T_s} e^{A_c t} B_c\,dt,\qquad
+E = \int_{0}^{T_s} e^{A_c t} E_c\,dt.
+\]
+In the remainder, we drop $\delta(\cdot)$ and work purely in deviation variables (so the steady-state is the origin).
+
+\section{Kalman filtering without disturbance step changes}
+Here we assume the unmeasured disturbances (flows $F_3,F_4$) do \emph{not} exhibit step changes; they are modeled as stochastic fluctuations around their operating point. A convenient discrete-time model is the standard linear stochastic system
+\[
+x_{k+1} = A x_k + B u_k + G w_k,\qquad
+y_k = C_y x_k + v_k,
+\]
+with joint Gaussian i.i.d.\ noise
+\[
+\begin{bmatrix} w_k \\ v_k \end{bmatrix}
+\sim \mathcal{N}_{\mathrm{iid}}
+\!\left(
+\begin{bmatrix} 0 \\ 0 \end{bmatrix},
+\begin{bmatrix} R_{ww} & R_{wv}\\ R_{vw} & R_{vv}\end{bmatrix}
+\right),\qquad R_{vw}=R_{wv}^\top.
+\]
+When no process/measurement cross-covariance is assumed, as in most cases in this report, set $R_{wv}=0$.
+
+\subsection{Stationary (static-gain) Kalman filter}
+The stationary filter uses constant gains obtained from the discrete algebraic Riccati equation (DARE). Let $P$ solve
+\[
+P = A P A^\top + G R_{ww} G^\top
+- (A P C_y^\top + G R_{wv})
+\left(C_y P C_y^\top + R_{vv}\right)^{-1}
+(A P C_y^\top + G R_{wv})^\top.
+\]
+Define the innovation covariance and gains
+\[
+R_e = C_y P C_y^\top + R_{vv},\qquad
+K_x = P C_y^\top R_e^{-1},\qquad
+K_w = R_{wv} R_e^{-1}.
+\]
+The stationary \emph{compute} recursion is then
+\begin{align*}
+\hat{x}_{k|k-1} &= A\hat{x}_{k-1|k-1} + B u_{k-1} + G\hat{w}_{k-1|k-1},\\
+\hat{y}_{k|k-1} &= C_y\hat{x}_{k|k-1},\\
+e_k &= y_k - \hat{y}_{k|k-1},\\
+\hat{x}_{k|k} &= \hat{x}_{k|k-1} + K_x e_k,\\
+\hat{w}_{k|k} &= K_w e_k.
+\end{align*}
+When $R_{wv}=0$, one gets $\hat{w}_{k|k}\equiv 0$ and the filter reduces to a standard stationary state estimator.
+
+\subsection{Dynamic (time-varying) Kalman filter}
+The dynamic filter propagates the covariance online. With prior covariance $P_{k-1|k-1}$, define
+\[
+P_{k|k-1} = A P_{k-1|k-1} A^\top + G R_{ww} G^\top,
+\]
+\[
+R_{e,k} = C_y P_{k|k-1} C_y^\top + R_{vv},\qquad
+K_{x,k} = P_{k|k-1} C_y^\top R_{e,k}^{-1},
+\]
+and update
+\[
+\hat{x}_{k|k} = \hat{x}_{k|k-1} + K_{x,k} e_k,\qquad
+P_{k|k} = (I - K_{x,k} C_y) P_{k|k-1}.
+\]
+If $R_{wv}\neq 0$, the innovation-based disturbance estimate can be retained as $\hat{w}_{k|k}=K_w e_k$ (with $K_w$ either stationary or made time-varying analogously).
+
+\section{Kalman filtering with disturbance step changes (offset-free estimation)}
+When $F_3,F_4$ contain step changes, modeling them as zero-mean white noise inside $w_k$ typically yields \emph{steady-state offsets} in the output estimates and (consequently) in MPC tracking. To avoid offsets, the estimator must include a disturbance model with integrator-like behavior, most commonly a random walk [see~\cite{pannocchia2003disturbance}].
+
+\subsection{Augmented disturbance-state model}
+Let $d_k\in\mathbb{R}^{n_d}$ represent unknown (constant or slowly varying) disturbance states. Use the random-walk model
+\[
+d_{k+1} = d_k + \eta_k,\qquad \eta_k\sim \mathcal{N}_{\mathrm{iid}}(0,Q_d),
+\]
+and let the disturbance enter the plant model as an additive term in the state update (or equivalently as an unknown input):
+\[
+x_{k+1} = A x_k + B u_k + G_d d_k + G_w w_k,\qquad
+y_k = C_y x_k + v_k.
+\]
+Define the augmented state
+\[
+x^a_k = \begin{bmatrix} x_k \\ d_k \end{bmatrix},
+\]
+giving the augmented linear system
+\[
+x^a_{k+1} =
+\underbrace{\begin{bmatrix} A & G_d \\ 0 & I \end{bmatrix}}_{A_a}
+x^a_k
++
+\underbrace{\begin{bmatrix} B \\ 0 \end{bmatrix}}_{B_a} u_k
++
+\underbrace{\begin{bmatrix} G_w & 0 \\ 0 & I \end{bmatrix}}_{G_a}
+\underbrace{\begin{bmatrix} w_k \\ \eta_k \end{bmatrix}}_{\xi_k},
+\qquad
+y_k =
+\underbrace{\begin{bmatrix} C_y & 0 \end{bmatrix}}_{C_a} x^a_k + v_k.
+\]
+$Q_d$ is chosen to reflect expected step magnitude/frequency: larger $Q_d$ enables faster tracking of steps but increases noise in $\hat{d}_k$ (and hence in $\hat{x}_k$).
+
+\subsection{Stationary and dynamic filters for the augmented model}
+Apply the same stationary/dynamic Kalman filter design as above, but with $(A,C_y,G)$ replaced by $(A_a,C_a,G_a)$ and with process-noise covariance
+\[
+R_{\xi\xi} = \mathrm{blkdiag}(R_{ww},Q_d).
+\]
+The resulting estimator produces
+\[
+\hat{x}^a_{k|k} = \begin{bmatrix} \hat{x}_{k|k} \\ \hat{d}_{k|k}\end{bmatrix},
+\]
+where $\hat{d}_{k|k}$ tracks piecewise-constant disturbance steps and removes steady-state offsets in $\hat{y}_{k|k}$, provided the augmented pair $(A_a,C_a)$ is detectable and the disturbance model is sufficiently excited by measurements.
+
+With random-walk disturbances, the estimator can shift $\hat{d}_k$ so that the predicted output matches measured steady-state changes. In closed loop, MPC operating on the augmented estimate compensates the estimated bias/disturbance, eliminating persistent tracking error for constant disturbances.
+
+\section{Simulation}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem6/kalman_tracking.pdf}
+    \caption{Dynamic Kalman filter tracking the four tank system state with process and measurement noise.}\label{fig:kalman_no_step}
+\end{figure}
+
+For purely stochastic, zero-mean disturbances (Figure~\ref{fig:kalman_no_step}), the dynamic Kalman filter performs as expected: the estimated tank levels closely track the true states, while remaining noticeably smoother than the measurements. No steady-state bias is observed, indicating that the assumed disturbance model is well matched to the actual process, and the innovations remain small and stationary.
+
+When step changes are introduced in the unmeasured disturbances (Figure~\ref{fig:kalman_with_step}), the filter continues to track the states. This might be due to the low rate of change in the state variables, allowing the observations to provide sufficient feedback until disturbance estimates re-converge. After a short adaptation period, the estimates re-converge without steady-state offset, showing that the disturbance augmentation is sufficient for offset-free estimation and sufficient for abrupt changes, in the vicinity of the steady state point.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{figures/problem6/kalman_tracking_step_changes.pdf}
+    \caption{Dynamic Kalman filter tracking the four tank system state with process and measurement noise, as well as step changes in the disturbances.}\label{fig:kalman_with_step}
+\end{figure}
